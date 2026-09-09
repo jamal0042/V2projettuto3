@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   Archive, BarChart3, Bell, BookOpen, Bot, CalendarDays, Clock3,
-  Database, FileText, Inbox, LayoutDashboard, Library, Plus, ShieldCheck, Sparkles, Users,
+  Database, FileText, Inbox, LayoutDashboard, Library, Plus, RotateCcw, ShieldCheck, Sparkles, Users,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -31,14 +31,15 @@ const navGroups: DashboardNavGroup[] = [
       { label: 'Emplacements', icon: ShieldCheck, href: '/dashboard/emplacements', roles: ['admin', 'librarian'] },
     ],
   },
-  {
-    label: 'Circulation',
-    items: [
-      { label: 'Emprunts & retours', icon: Clock3, href: '/dashboard/prets', roles: ['admin', 'librarian'] },
-      { label: 'Réservations', icon: BookOpen, href: '/dashboard/reservations', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] },
-      { label: 'Pénalités', icon: Bell, href: '/dashboard/penalites', roles: ['admin', 'librarian'] },
-    ],
-  },
+{
+      label: 'Circulation',
+      items: [
+        { label: 'Emprunts & retours', icon: Clock3, href: '/dashboard/prets', roles: ['admin', 'librarian'] },
+        { label: 'Retours', icon: RotateCcw, href: '/dashboard/retours', roles: ['admin', 'librarian'] },
+        { label: 'Réservations', icon: BookOpen, href: '/dashboard/reservations', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] },
+        { label: 'Pénalités', icon: Bell, href: '/dashboard/penalites', roles: ['admin', 'librarian'] },
+      ],
+    },
   {
     label: 'Administration',
     items: [{ label: 'Utilisateurs', icon: Users, href: '/dashboard/utilisateurs', roles: ['admin', 'librarian'] }],

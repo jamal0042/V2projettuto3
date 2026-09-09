@@ -1,5 +1,6 @@
-import DataPage from '@/components/dashboard/data-page'
+import ReturnForm from '@/components/dashboard/return-form'
+import DashboardFrame from '@/components/dashboard/dashboard-frame'
 
 export default function RetoursPage() {
-	return <DataPage resource="retours" />
+  return <DashboardFrame active="Retours"><ReturnForm /></DashboardFrame>
 }
