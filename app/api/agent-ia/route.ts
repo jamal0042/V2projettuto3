@@ -10,7 +10,10 @@ export async function POST(request: Request) {
   const message = typeof body?.message === 'string' ? body.message.trim() : ''
   if (!message) return NextResponse.json({ error: 'Message vide.' }, { status: 400 })
 
-  const apiKey = process.env.GEMINI_API_KEY
+  // Nettoyage de la clé : certains environnement stockent la valeur copiée AVEC des guillemets
+  // (ex. GEMINI_API_KEY="AIza...") ce qui rend la clé invalide pour l'API Google.
+  const rawKey = (process.env.GEMINI_API_KEY || '').trim()
+  const apiKey = rawKey.replace(/^["']+|["']+$/g, '')
   if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY est absente du serveur.' }, { status: 500 })
 
   // Modèle Gemini actif. Surchargable via GEMINI_MODEL pour suivre les évolutions de l'API.
@@ -53,6 +56,20 @@ export async function POST(request: Request) {
   }
 
   const result = await response.json().catch(() => null)
-  if (!response.ok) return NextResponse.json({ error: result?.error?.message || 'Le service IA est indisponible.' }, { status: 502 })
+  if (!response.ok) {
+    const apiMessage = String(result?.error?.message || '')
+    let friendly = 'Le service IA est indisponible.'
+    if (/API key not valid/i.test(apiMessage)) {
+      friendly =
+        'La clé API Gemini est invalide. Régénérez une clé sur Google AI Studio (https://aistudio.google.com/apikey), puis remplacez la valeur de GEMINI_API_KEY dans les variables d’environnement (sans guillemets).'
+    } else if (/model|not found|deprecated|no longer available/i.test(apiMessage)) {
+      friendly = `Le modèle IA configuré n’est plus disponible. La variable GEMINI_MODEL doit pointer vers un modèle actif (actuellement « ${model} »).`
+    } else if (/quota|rate limit|429|resourceExhausted/i.test(apiMessage)) {
+      friendly = 'Quota de l’API Gemini dépassé. Réessayez dans quelques instants ou vérifiez votre plan de facturation.'
+    } else if (apiMessage) {
+      friendly = `Erreur du service IA : ${apiMessage}`
+    }
+    return NextResponse.json({ error: friendly }, { status: 502 })
+  }
   return NextResponse.json({ answer: result?.candidates?.[0]?.content?.parts?.[0]?.text || 'Je n\'ai pas pu générer de réponse.' })
 }
