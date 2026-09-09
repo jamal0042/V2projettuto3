@@ -58,7 +58,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     for (const field of PROFILE_FIELDS) {
       if (body[field] !== undefined) {
-        updates[field] = body[field] === null || String(body[field]).trim() === '' ? null : String(body[field]).trim()
+        const v = body[field]
+        if (v === null) {
+          updates[field] = null
+        } else if (typeof v === 'boolean' || typeof v === 'number') {
+          updates[field] = v
+        } else {
+          updates[field] = String(v).trim() === '' ? null : String(v).trim()
+        }
       }
     }
 

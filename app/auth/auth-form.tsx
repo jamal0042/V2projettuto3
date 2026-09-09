@@ -175,7 +175,7 @@
         <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
         <input
             {...props}
-            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-slate-900 dark:text-slate-100"
+            className="w-full px-2.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-slate-900 dark:text-slate-100"
         />
         </label>
     )
@@ -185,7 +185,7 @@
         <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{label}</span>
         <select
             {...props}
-            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-slate-900 dark:text-slate-100"
+            className="w-full px-2.5 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-slate-900 dark:text-slate-100"
         >
             {children}
         </select>
@@ -358,7 +358,19 @@
             )}
 
             {mode === 'register' && (
-            <form className="auth-form" onSubmit={handleRegisterSubmit}>
+            <form
+            className="auth-form"
+            onSubmit={(e) => {
+                // Saisie : la touche Entrée fait avancer l'étape au lieu de
+                // soumettre prématurément une demande incomplète.
+                if (step < 5) {
+                e.preventDefault()
+                if (canNext()) setStep((s) => Math.min(s + 1, 5))
+                return
+                }
+                handleRegisterSubmit(e)
+            }}
+            >
                 {renderStep()}
                 {error && (
                 <div className="auth-feedback error" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
