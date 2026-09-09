@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import SplashScreen from '@/components/SplashScreen'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="fr">
       <body className="antialiased">
+        <SplashScreen />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

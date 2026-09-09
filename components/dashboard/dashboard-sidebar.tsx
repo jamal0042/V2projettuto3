@@ -24,7 +24,7 @@ export default function DashboardSidebar({ groups, active, open, onNavigate, onC
   return (
     <>
       {open && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 ease-in-out flex flex-col ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`sidebar-enter fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 ease-in-out flex flex-col ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex items-center gap-3 p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center"><Library size={18} strokeWidth={2.5} /></div>
           <div className="flex-1"><strong className="block text-sm">Biblius</strong><span className="text-xs text-slate-500 dark:text-slate-400">Library OS</span></div>

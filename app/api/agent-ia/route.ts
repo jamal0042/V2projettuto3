@@ -13,6 +13,9 @@ export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY est absente du serveur.' }, { status: 500 })
 
+  // Modèle Gemini actif. Surchargable via GEMINI_MODEL pour suivre les évolutions de l'API.
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
+
   const { data: resources } = await supabase
     .from('digital_resources')
     .select('id, title, description, type, category')
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
 
   let response: Response
   try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
