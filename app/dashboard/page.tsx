@@ -2,7 +2,7 @@
 
     import { useEffect, useState } from 'react'
     import {
-    Archive, Bell, BookOpen, Bot, ChevronDown, CircleHelp, Clock3,
+    Archive, BarChart3, Bell, BookOpen, Bot, ChevronDown, CircleHelp, Clock3,
     Database, FileText, LayoutDashboard, Library, LogOut, MoreHorizontal,
     Plus, Settings, ShieldCheck, Sparkles, Users, X
     } from 'lucide-react'
@@ -10,6 +10,7 @@
     import { createClient } from '@/lib/supabase/client'
     import DashboardSidebar from '@/components/dashboard/dashboard-sidebar'
     import DashboardTopbar from '@/components/dashboard/dashboard-topbar'
+    import RapportsView from '@/components/dashboard/rapports-view'
     import { ActivityPanel, DashboardStatsGrid } from '@/components/dashboard/dashboard-widgets'
     import { filterDashboardGroups, type DashboardActivity, type DashboardNavGroup, type DashboardStats, type MemberRole } from '@/components/dashboard/dashboard-types'
 
@@ -37,6 +38,12 @@
         { label: 'Emprunts & retours', icon: Clock3, href: '/dashboard/prets', roles: ['admin', 'librarian'] }, 
         { label: 'Réservations', icon: BookOpen, href: '/dashboard/reservations', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] }, 
         { label: 'Pénalités', icon: Bell, href: '/dashboard/penalites', roles: ['admin', 'librarian'] }
+        ] 
+    },
+    { 
+        label: 'Rapports', 
+        items: [
+        { label: 'Rapports', icon: BarChart3, href: '/dashboard/rapports' }
         ] 
     },
     ]
@@ -302,6 +309,20 @@
                 </div>
                 </section>
             </div>
+
+            {/* Rapports & Analyses */}
+            <section className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                    <h2 className="font-semibold">Rapports & analyse</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Représentation graphique des données de la bibliothèque.</p>
+                </div>
+                <button onClick={() => router.push('/dashboard/rapports')} className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">
+                    Voir tous les rapports →
+                </button>
+                </div>
+                <RapportsView variant="compact" />
+            </section>
 
             {/* Footer */}
             <footer className="mt-12 pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">

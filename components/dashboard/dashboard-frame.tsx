@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Archive, Bell, BookOpen, Clock3, Database, FileText, LayoutDashboard, Library, ShieldCheck, Users } from 'lucide-react'
+import { Archive, BarChart3, Bell, BookOpen, Clock3, Database, FileText, LayoutDashboard, Library, ShieldCheck, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import DashboardSidebar from './dashboard-sidebar'
@@ -12,6 +12,7 @@ const groups: DashboardNavGroup[] = [
   { label: 'Workspace', items: [{ label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' }, { label: 'Documents', icon: FileText, href: '/dashboard/documents', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] }, { label: 'Bibliothèque numérique', icon: Library, href: '/dashboard/ressources-numeriques', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] }] },
   { label: 'Catalogue', items: [{ label: 'Exemplaires', icon: Archive, href: '/dashboard/exemplaires', roles: ['admin', 'librarian'] }, { label: 'Auteurs', icon: Users, href: '/dashboard/auteurs', roles: ['admin', 'librarian'] }, { label: 'Classifications', icon: Database, href: '/dashboard/statistiques', roles: ['admin', 'librarian', 'teacher'] }, { label: 'Emplacements', icon: ShieldCheck, href: '/dashboard/emplacements', roles: ['admin', 'librarian'] }] },
   { label: 'Circulation', items: [{ label: 'Emprunts & retours', icon: Clock3, href: '/dashboard/prets', roles: ['admin', 'librarian'] }, { label: 'Réservations', icon: BookOpen, href: '/dashboard/reservations', roles: ['admin', 'librarian', 'teacher', 'student', 'external'] }, { label: 'Pénalités', icon: Bell, href: '/dashboard/penalites', roles: ['admin', 'librarian'] }] },
+  { label: 'Rapports', items: [{ label: 'Rapports', icon: BarChart3, href: '/dashboard/rapports' }] },
 ]
 
 export default function DashboardFrame({ active, children }: { active: string; children: React.ReactNode }) {
