@@ -1,7 +1,7 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
-import { ArrowLeft, BookOpen, Check, Loader2, RefreshCw, X } from 'lucide-react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, BookOpen, Check, Loader2, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -12,18 +12,93 @@ function generateCode(prefix = 'BC') {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`
 }
 
+function normalize(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+}
+
+/** Cote Dewey : 3 premières lettres du nom de famille de l'auteur principal. */
+function cutterFromAuthor(name: string) {
+  const parts = normalize(name).split(' ')
+  const surname = parts[parts.length - 1] || ''
+  return (surname + 'XXX').slice(0, 3)
+}
+
+/** Marque de titre : initiale du premier mot significatif. */
+function titleMark(title: string) {
+  const normalized = normalize(title)
+  const word = normalized
+    .split(' ')
+    .find((w) => w && !['LE', 'LA', 'LES', 'UN', 'UNE', 'UNES', 'DES', 'DE', 'DU', "L'", 'L'].includes(w))
+  return word ? word.slice(0, 1) : ''
+}
+
+/** Cote complète au format Dewey : « classe » + Cutter (auteur) + initiale du titre. */
+function buildDeweyCote(dewey: string, author: string, title: string) {
+  if (!dewey || !author) return ''
+  const authorCutter = cutterFromAuthor(author)
+  const mark = title ? titleMark(title) : ''
+  return `${dewey} ${authorCutter}${mark ? ` ${mark}` : ''}`
+}
+
 export default function DocumentCreateForm() {
   const router = useRouter()
-  const [title, setTitle] = useState(''); const [type, setType] = useState('book'); const [isbn, setIsbn] = useState(''); const [publisher, setPublisher] = useState(''); const [year, setYear] = useState(''); const [description, setDescription] = useState('')
-  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]); const [authorDraft, setAuthorDraft] = useState(''); const [authors, setAuthors] = useState<Author[]>([]); const [deweyCode, setDeweyCode] = useState(''); const [deweyClasses, setDeweyClasses] = useState<Dewey[]>([])
-  const [barcode, setBarcode] = useState(generateCode()); const [inventoryCode, setInventoryCode] = useState(''); const [cote, setCote] = useState('')
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [success, setSuccess] = useState(''); const [allowed, setAllowed] = useState(true)
+  const [title, setTitle] = useState('')
+  const [type, setType] = useState('book')
+  const [isbn, setIsbn] = useState('')
+  const [publisher, setPublisher] = useState('')
+  const [year, setYear] = useState('')
+  const [description, setDescription] = useState('')
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
+  const [authorDraft, setAuthorDraft] = useState('')
+  const [authors, setAuthors] = useState<Author[]>([])
+  const [deweyCode, setDeweyCode] = useState('')
+  const [deweyClasses, setDeweyClasses] = useState<Dewey[]>([])
+  const [barcode, setBarcode] = useState(generateCode())
+  const [inventoryCode, setInventoryCode] = useState('')
+  const [cote, setCote] = useState('')
+  const [coteManual, setCoteManual] = useState(false)
+
+  // Nouvel auteur (création à la volée, sans toucher aux tables existantes)
+  const [addingAuthor, setAddingAuthor] = useState(false)
+  const [newAuthorName, setNewAuthorName] = useState('')
+  const [newAuthorNationality, setNewAuthorNationality] = useState('')
+  const [newAuthorBirthYear, setNewAuthorBirthYear] = useState('')
+  const [authorBusy, setAuthorBusy] = useState(false)
+
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [allowed, setAllowed] = useState(true)
 
   useEffect(() => {
     const supabase = createClient()
-    Promise.all([supabase.from('auteurs').select('id, name').order('name'), supabase.from('dewey_classes').select('code, libelle').eq('status', 'active').order('code')]).then(([authorResult, deweyResult]) => { setAuthors((authorResult.data || []) as Author[]); setDeweyClasses((deweyResult.data || []) as Dewey[]) })
-    supabase.auth.getSession().then(async ({ data }) => { if (!data.session?.user) return; const { data: member } = await supabase.from('members').select('role').eq('id', data.session.user.id).maybeSingle(); if (member?.role && !['admin', 'librarian'].includes(member.role)) setAllowed(false) })
+    Promise.all([supabase.from('auteurs').select('id, name').order('name'), supabase.from('dewey_classes').select('code, libelle').eq('status', 'active').order('code')]).then(([authorResult, deweyResult]) => {
+      setAuthors((authorResult.data || []) as Author[])
+      setDeweyClasses((deweyResult.data || []) as Dewey[])
+    })
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session?.user) return
+      const { data: member } = await supabase.from('members').select('role').eq('id', data.session.user.id).maybeSingle()
+      if (member?.role && !['admin', 'librarian'].includes(member.role)) setAllowed(false)
+    })
   }, [])
+
+  const selectedAuthorNames = useMemo(() => {
+    return selectedAuthors
+      .map((id) => authors.find((author) => author.id === id)?.name || '')
+      .filter(Boolean)
+  }, [selectedAuthors, authors])
+
+  useEffect(() => {
+    if (coteManual) return
+    setCote(buildDeweyCote(deweyCode, selectedAuthorNames[0] || '', title))
+  }, [deweyCode, selectedAuthorNames, title, coteManual])
 
   function addAuthor(id: string) {
     if (id && !selectedAuthors.includes(id)) setSelectedAuthors((current) => [...current, id])
@@ -34,19 +109,260 @@ export default function DocumentCreateForm() {
     setSelectedAuthors((current) => current.filter((item) => item !== id))
   }
 
+  async function createAuthor() {
+    const name = newAuthorName.trim()
+    if (!name) return
+    setAuthorBusy(true)
+    const supabase = createClient()
+    const { data, error: insertError } = await supabase
+      .from('auteurs')
+      .insert({ name, nationality: newAuthorNationality.trim() || null, birth_year: newAuthorBirthYear ? Number(newAuthorBirthYear) : null })
+      .select('id, name')
+      .single()
+    setAuthorBusy(false)
+    if (insertError || !data) {
+      setError(insertError?.message || 'L’auteur n’a pas pu être ajouté.')
+      return
+    }
+    setAuthors((current) => [...current, { id: data.id, name: data.name }])
+    setSelectedAuthors((current) => [...current, data.id])
+    setAddingAuthor(false)
+    setNewAuthorName('')
+    setNewAuthorNationality('')
+    setNewAuthorBirthYear('')
+    setError('')
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(''); setSuccess(''); const supabase = createClient()
-    if (selectedAuthors.length === 0) { setError('Veuillez sélectionner au moins un auteur.'); setBusy(false); return }
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setSuccess('')
+    const supabase = createClient()
+    if (selectedAuthors.length === 0) {
+      setError('Veuillez sélectionner ou créer au moins un auteur.')
+      setBusy(false)
+      return
+    }
     const selectedDewey = deweyClasses.find((item) => item.code === deweyCode)
-    const { data: document, error: documentError } = await supabase.from('documents').insert({ title: title.trim(), type, isbn: isbn.trim() || null, publisher: publisher.trim() || null, year: year ? Number(year) : null, description: description.trim() || null, format: 'physique', dewey_code: deweyCode || null, cote_dewey: selectedDewey ? `${selectedDewey.code} ${selectedDewey.libelle}` : null }).select('id').single()
-    if (documentError || !document) { setError(documentError?.message || 'Le document n’a pas pu être créé.'); setBusy(false); return }
+    const { data: document, error: documentError } = await supabase
+      .from('documents')
+      .insert({
+        title: title.trim(),
+        type,
+        isbn: isbn.trim() || null,
+        publisher: publisher.trim() || null,
+        year: year ? Number(year) : null,
+        description: description.trim() || null,
+        format: 'physique',
+        dewey_code: deweyCode || null,
+        cote_dewey: selectedDewey ? `${selectedDewey.code} ${selectedDewey.libelle}` : null,
+      })
+      .select('id')
+      .single()
+    if (documentError || !document) {
+      setError(documentError?.message || 'Le document n’a pas pu être créé.')
+      setBusy(false)
+      return
+    }
     const authorRows = selectedAuthors.map((id, index) => ({ document_id: document.id, author_id: id, role: index === 0 ? 'principal' : 'coauteur', author_order: index + 1 }))
     const { error: authorError } = await supabase.from('document_auteurs').insert(authorRows)
-    const { error: copyError } = await supabase.from('exemplaires').insert({ document_id: document.id, barcode: barcode.trim(), inventory_code: inventoryCode.trim() || null, cote_complete: cote.trim() || null, status: 'available' })
-    if (authorError || copyError) { await supabase.from('document_auteurs').delete().eq('document_id', document.id); await supabase.from('exemplaires').delete().eq('document_id', document.id); await supabase.from('documents').delete().eq('id', document.id); setError(authorError?.message || copyError?.message || 'Le livre et ses relations n’ont pas pu être enregistrés.') } else { setSuccess(`Document enregistré avec ${selectedAuthors.length} auteur${selectedAuthors.length > 1 ? 's' : ''}.`); setTitle(''); setIsbn(''); setPublisher(''); setYear(''); setDescription(''); setSelectedAuthors([]); setDeweyCode(''); setBarcode(generateCode()); setInventoryCode(''); setCote('') }
+    const { error: copyError } = await supabase.from('exemplaires').insert({
+      document_id: document.id,
+      barcode: barcode.trim(),
+      inventory_code: inventoryCode.trim() || null,
+      cote_complete: cote.trim() || null,
+      status: 'available',
+    })
+    if (authorError || copyError) {
+      await supabase.from('document_auteurs').delete().eq('document_id', document.id)
+      await supabase.from('exemplaires').delete().eq('document_id', document.id)
+      await supabase.from('documents').delete().eq('id', document.id)
+      setError(authorError?.message || copyError?.message || 'Le livre et ses relations n’ont pas pu être enregistrés.')
+    } else {
+      setSuccess(`Document enregistré avec ${selectedAuthors.length} auteur${selectedAuthors.length > 1 ? 's' : ''} et la cote « ${cote.trim() || '—'} ».`)
+      setTitle('')
+      setIsbn('')
+      setPublisher('')
+      setYear('')
+      setDescription('')
+      setSelectedAuthors([])
+      setDeweyCode('')
+      setBarcode(generateCode())
+      setInventoryCode('')
+      setCote('')
+      setCoteManual(false)
+    }
     setBusy(false)
   }
 
   const input = 'w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-slate-700'
-  return <div className="flex-1 p-6 lg:p-8"><div className="mx-auto max-w-4xl"><button onClick={() => router.push('/dashboard')} className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 dark:text-slate-400"><ArrowLeft size={16} /> Retour au dashboard</button><div className="mb-6 flex items-start gap-3"><div className="rounded-xl bg-blue-100 p-3 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><BookOpen size={20} /></div><div><h1 className="text-2xl font-bold">Nouveau document</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Ajoutez un livre, ses auteurs (un ou plusieurs), sa classification Dewey et son exemplaire.</p></div></div>{!allowed ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">Seuls les administrateurs et bibliothécaires peuvent ajouter un document.</div> : <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900"><div className="grid gap-4 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1 block text-xs font-medium">Titre du livre *</span><input required value={title} onChange={(e) => setTitle(e.target.value)} className={input} /></label><div className="sm:col-span-2"><span className="mb-1 block text-xs font-medium">Auteurs * (un ou plusieurs)</span><div className="flex gap-2"><select value={authorDraft} onChange={(e) => setAuthorDraft(e.target.value)} className={input}><option value="">Ajouter un auteur…</option>{authors.filter((item) => !selectedAuthors.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button type="button" onClick={() => addAuthor(authorDraft)} disabled={!authorDraft} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-blue-600 transition hover:bg-blue-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-blue-900/20"><Check size={15} /> Ajouter</button></div>{selectedAuthors.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedAuthors.map((id) => { const author = authors.find((item) => item.id === id); return <span key={id} className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">{author?.name}<button type="button" onClick={() => removeAuthor(id)} className="rounded p-0.5 text-blue-400 hover:text-blue-700" aria-label={`Retirer ${author?.name}`}><X size={13} /></button></span> })}</div>}</div><label><span className="mb-1 block text-xs font-medium">Classification Dewey *</span><select required value={deweyCode} onChange={(e) => setDeweyCode(e.target.value)} className={input}><option value="">Sélectionner le code Dewey</option>{deweyClasses.map((item) => <option key={item.code} value={item.code}>{item.code} · {item.libelle}</option>)}</select></label><label><span className="mb-1 block text-xs font-medium">Type</span><select value={type} onChange={(e) => setType(e.target.value)} className={input}><option value="book">Livre</option><option value="thesis">Thèse</option><option value="memoire">Mémoire</option><option value="journal">Journal</option><option value="article">Article</option></select></label><label><span className="mb-1 block text-xs font-medium">ISBN</span><input value={isbn} onChange={(e) => setIsbn(e.target.value)} className={input} /></label><label><span className="mb-1 block text-xs font-medium">Éditeur</span><input value={publisher} onChange={(e) => setPublisher(e.target.value)} className={input} /></label><label><span className="mb-1 block text-xs font-medium">Année</span><input type="number" value={year} onChange={(e) => setYear(e.target.value)} className={input} /></label><label className="sm:col-span-2"><span className="mb-1 block text-xs font-medium">Description</span><textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} className={`${input} resize-none`} /></label></div><div className="border-t border-slate-200 pt-6 dark:border-slate-800"><h2 className="mb-4 font-semibold">Exemplaire lié</h2><div className="grid gap-4 sm:grid-cols-3"><label><span className="mb-1 block text-xs font-medium">Code-barres généré *</span><div className="flex gap-2"><input required value={barcode} onChange={(e) => setBarcode(e.target.value)} className={input} /><button type="button" onClick={() => setBarcode(generateCode())} className="rounded-lg border border-slate-200 px-3 dark:border-slate-700" title="Générer un autre code"><RefreshCw size={16} /></button></div></label><label><span className="mb-1 block text-xs font-medium">Code inventaire</span><input value={inventoryCode} onChange={(e) => setInventoryCode(e.target.value)} className={input} /></label><label><span className="mb-1 block text-xs font-medium">Cote complète</span><input value={cote} onChange={(e) => setCote(e.target.value)} placeholder={deweyCode || '700.1'} className={input} /></label></div></div>{error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}{success && <p className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"><Check size={16} />{success}</p>}<button disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{busy ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />} Enregistrer le livre et l’exemplaire</button></form>}</div></div>
+
+  return (
+    <div className="flex-1 p-6 lg:p-8">
+      <div className="mx-auto max-w-4xl">
+        <button onClick={() => router.push('/dashboard')} className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 dark:text-slate-400">
+          <ArrowLeft size={16} /> Retour au dashboard
+        </button>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="rounded-xl bg-blue-100 p-3 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Nouveau document</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Ajoutez un livre, ses auteurs (un ou plusieurs), sa classification Dewey et son exemplaire. La cote est générée selon la norme Dewey.</p>
+          </div>
+        </div>
+
+        {!allowed ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            Seuls les administrateurs et bibliothécaires peuvent ajouter un document.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium">Titre du livre *</span>
+                <input required value={title} onChange={(e) => setTitle(e.target.value)} className={input} />
+              </label>
+
+              {/* Auteurs */}
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium">Auteurs * (un ou plusieurs)</span>
+                <div className="flex gap-2">
+                  <select value={authorDraft} onChange={(e) => setAuthorDraft(e.target.value)} className={input}>
+                    <option value="">Ajouter un auteur existant…</option>
+                    {authors.filter((item) => !selectedAuthors.includes(item.id)).map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => addAuthor(authorDraft)} disabled={!authorDraft} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-blue-600 transition hover:bg-blue-50 disabled:opacity-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-slate-800">
+                    <Plus size={15} /> Ajouter
+                  </button>
+                  <button type="button" onClick={() => setAddingAuthor((current) => !current)} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700">
+                    <Sparkles size={15} /> Nouvel auteur
+                  </button>
+                </div>
+
+                {addingAuthor && (
+                  <div className="mt-3 space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="sm:col-span-1">
+                        <span className="mb-1 block text-xs font-medium">Nom *</span>
+                        <input autoFocus value={newAuthorName} onChange={(e) => setNewAuthorName(e.target.value)} placeholder="Ex. Victor Hugo" className={input} />
+                      </label>
+                      <label>
+                        <span className="mb-1 block text-xs font-medium">Nationalité</span>
+                        <input value={newAuthorNationality} onChange={(e) => setNewAuthorNationality(e.target.value)} placeholder="Ex. Française" className={input} />
+                      </label>
+                      <label>
+                        <span className="mb-1 block text-xs font-medium">Année de naissance</span>
+                        <input value={newAuthorBirthYear} onChange={(e) => setNewAuthorBirthYear(e.target.value)} placeholder="Ex. 1802" className={input} />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={createAuthor} disabled={authorBusy || !newAuthorName.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50">
+                        {authorBusy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Enregistrer l’auteur
+                      </button>
+                      <button type="button" onClick={() => setAddingAuthor(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedAuthors.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedAuthorNames.map((name, index) => (
+                      <span key={selectedAuthors[index]} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        {name} {index === 0 && <em className="not-italic font-semibold">(principal)</em>}
+                        <button type="button" onClick={() => removeAuthor(selectedAuthors[index])} className="ml-0.5 rounded-full p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800" aria-label={`Retirer ${name}`}>
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <label>
+                <span className="mb-1 block text-xs font-medium">Type</span>
+                <select value={type} onChange={(e) => setType(e.target.value)} className={input}>
+                  <option value="book">Livre</option>
+                  <option value="thesis">Mémoire / Thèse</option>
+                  <option value="journal">Périodique</option>
+                  <option value="multimedia">Multimédia</option>
+                </select>
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-medium">ISBN</span>
+                <input value={isbn} onChange={(e) => setIsbn(e.target.value)} placeholder="Ex. 978-2-0703-6846-8" className={input} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-medium">Éditeur</span>
+                <input value={publisher} onChange={(e) => setPublisher(e.target.value)} className={input} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-medium">Année de publication</span>
+                <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="Ex. 2024" className={input} />
+              </label>
+
+              {/* Classification Dewey */}
+              <label className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium">Classification Dewey</span>
+                <select value={deweyCode} onChange={(e) => setDeweyCode(e.target.value)} className={input}>
+                  <option value="">Sélectionner une classe Dewey…</option>
+                  {deweyClasses.map((item) => (
+                    <option key={item.code} value={item.code}>{item.code} — {item.libelle}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Cote générée */}
+              <label className="sm:col-span-2">
+                <span className="mb-1 flex items-center gap-2 text-xs font-medium">
+                  Cote (générée selon la norme Dewey)
+                  <button
+                    type="button"
+                    onClick={() => { setCoteManual(false); setCote(buildDeweyCote(deweyCode, selectedAuthorNames[0] || '', title)) }}
+                    className="inline-flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                    title="Régénérer la cote"
+                  >
+                    <RefreshCw size={11} /> Régénérer
+                  </button>
+                </span>
+                <input value={cote} onChange={(e) => { setCote(e.target.value); setCoteManual(true) }} placeholder="Attribuée automatiquement : classe Dewey + auteur + titre" className={input} />
+              </label>
+
+              <label>
+                <span className="mb-1 block text-xs font-medium">Code-barres *</span>
+                <div className="flex gap-2">
+                  <input required value={barcode} onChange={(e) => setBarcode(e.target.value)} className={input} />
+                  <button type="button" onClick={() => setBarcode(generateCode())} className="rounded-lg border border-slate-200 px-3 dark:border-slate-700" aria-label="Générer un code-barres">
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-medium">Code inventaire</span>
+                <input value={inventoryCode} onChange={(e) => setInventoryCode(e.target.value)} className={input} />
+              </label>
+
+              <label className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium">Description</span>
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={input} />
+              </label>
+            </div>
+
+            {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+            {success && <p className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"><Check size={16} /> {success}</p>}
+
+            <button disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60">
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Enregistrer le document et son exemplaire
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
 }
