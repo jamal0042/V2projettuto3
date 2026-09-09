@@ -41,6 +41,12 @@
         ] 
     },
     { 
+        label: 'Administration', 
+        items: [
+        { label: 'Utilisateurs', icon: Users, href: '/dashboard/utilisateurs', roles: ['admin', 'librarian'] }
+        ] 
+    },
+    { 
         label: 'Rapports', 
         items: [
         { label: 'Rapports', icon: BarChart3, href: '/dashboard/rapports' }
@@ -61,6 +67,7 @@
     const [active, setActive] = useState('Dashboard')
     const [dark, setDark] = useState(true)
     const [role, setRole] = useState<MemberRole>('student')
+    const [member, setMember] = useState<{ first_name: string; last_name: string; role: MemberRole } | null>(null)
     const [stats, setStats] = useState<DashboardStats>({ documents: null, availableCopies: null, activeLoans: null, members: null })
     const [activities, setActivities] = useState<DashboardActivity[]>([])
 
@@ -70,8 +77,11 @@
         const supabase = createClient()
         supabase.auth.getUser().then(async ({ data }) => {
             if (!data.user) return
-            const { data: member } = await supabase.from('members').select('role').eq('id', data.user.id).maybeSingle()
-            if (member?.role) setRole(member.role as MemberRole)
+            const { data: member } = await supabase.from('members').select('first_name, last_name, role').eq('id', data.user.id).maybeSingle()
+            if (member?.role) {
+            setRole(member.role as MemberRole)
+            setMember({ first_name: member.first_name || '', last_name: member.last_name || '', role: member.role as MemberRole })
+            }
         })
 
         async function loadDashboardData() {
@@ -114,7 +124,7 @@
 
     return (
         <main className={`${dark ? 'dark min-h-screen bg-slate-950 text-slate-100' : 'min-h-screen bg-slate-50 text-slate-900'} transition-colors duration-300 flex`} suppressHydrationWarning>
-        <DashboardSidebar groups={filterDashboardGroups(navGroups, role)} active={active} open={sidebarOpen} onNavigate={(label, href) => { setActive(label); setSidebarOpen(false); router.push(href) }} onClose={() => setSidebarOpen(false)} onLogout={handleLogout} onSettings={() => router.push('/dashboard/parametres')} onHelp={() => router.push('/dashboard/agent-ia')} role={role} />
+        <DashboardSidebar groups={filterDashboardGroups(navGroups, role)} active={active} open={sidebarOpen} onNavigate={(label, href) => { setActive(label); setSidebarOpen(false); router.push(href) }} onClose={() => setSidebarOpen(false)} onLogout={handleLogout} onSettings={() => router.push('/dashboard/parametres')} onHelp={() => router.push('/dashboard/agent-ia')} role={role} member={member} />
 
         {/* SIDEBAR */}
         <div className="hidden">
@@ -191,7 +201,7 @@
         {/* MAIN COLUMN */}
         <section className="flex-1 lg:ml-64 flex flex-col min-h-screen">
             {/* TOPBAR */}
-            <DashboardTopbar active={active} dark={dark} onMenu={() => setSidebarOpen(true)} onToggleTheme={() => { const next = !dark; setDark(next); window.localStorage.setItem('biblius-dashboard-theme', next ? 'dark' : 'light') }} />
+            <DashboardTopbar active={active} dark={dark} onMenu={() => setSidebarOpen(true)} onToggleTheme={() => { const next = !dark; setDark(next); window.localStorage.setItem('biblius-dashboard-theme', next ? 'dark' : 'light') }} initials={member ? `${member.first_name[0]?.toUpperCase() || ''}${member.last_name[0]?.toUpperCase() || ''}` : ''} />
 
             {/* CONTENT */}
             <div className="flex-1 p-6 lg:p-8 space-y-8">
@@ -201,7 +211,7 @@
                 <p className="flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> Système opérationnel
                 </p>
-                <h1 className="text-2xl font-bold">Bonjour, Jamal.</h1>
+                <h1 className="text-2xl font-bold">Bonjour, {member?.first_name || '…'}.</h1>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Voici ce qui se passe dans votre bibliothèque aujourd&apos;hui.</p>
                 </div>
                 <button onClick={() => router.push('/dashboard/documents/ajouter')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-sm">

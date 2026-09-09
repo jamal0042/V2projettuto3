@@ -53,6 +53,7 @@ function availableActions(m: Member): { value: string; label: string; danger?: b
   } else if (m.status === 'suspended' || m.status === 'inactive') {
     actions.push({ value: 'active', label: 'Réactiver' })
   } else if (m.status === 'pending') {
+    actions.push({ value: 'active', label: 'Activer' })
     if (m.invite_status !== 'accepted') actions.push({ value: 'resend', label: 'Renvoyer lʼinvitation' })
     actions.push({ value: 'inactive', label: 'Désactiver', danger: true })
   }

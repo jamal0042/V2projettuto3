@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { BookOpen, Check, Database, Loader2, Pencil, Search, Trash2, UserRound, X } from 'lucide-react'
+import { BookOpen, Check, Clock, Database, Loader2, Pencil, Search, Trash2, UserRound, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Author = { id: string; name: string }
@@ -32,6 +32,14 @@ type EditState = {
   authorIds: string[]
 } | null
 
+type LoanRow = {
+  id: string
+  status: string
+  loan_date: string | null
+  due_date: string | null
+  copy: { barcode: string; document: { id: string; title: string; type: string; year: number | null } | null } | null
+}
+
 export default function DocumentCatalog() {
   const [documents, setDocuments] = useState<DocumentRow[]>([])
   const [authors, setAuthors] = useState<Author[]>([])
@@ -41,11 +49,14 @@ export default function DocumentCatalog() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [allowed, setAllowed] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
   const [roleChecked, setRoleChecked] = useState(false)
   const [editing, setEditing] = useState<EditState>(null)
   const [deleting, setDeleting] = useState<DocumentRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [loans, setLoans] = useState<LoanRow[]>([])
+  const [loansLoading, setLoansLoading] = useState(false)
 
   async function loadDocuments(supabase: ReturnType<typeof createClient>) {
     const { data, error: queryError } = await supabase
@@ -63,6 +74,18 @@ export default function DocumentCatalog() {
       )
   }
 
+  async function loadLoans(supabase: ReturnType<typeof createClient>, memberId: string) {
+    setLoansLoading(true)
+    const { data, error: queryError } = await supabase
+      .from('prets')
+      .select('id, status, loan_date, due_date, exemplaires(barcode, documents(id, title, type, year))')
+      .eq('member_id', memberId)
+      .order('loan_date', { ascending: false })
+    if (queryError) setError(queryError.message)
+    else setLoans((data || []).map((row: any) => ({ ...row, copy: row.exemplaires })))
+    setLoansLoading(false)
+  }
+
   useEffect(() => {
     const supabase = createClient()
     Promise.all([supabase.from('auteurs').select('id, name').order('name'), supabase.from('dewey_classes').select('code, libelle').eq('status', 'active').order('code')]).then(([authorResult, deweyResult]) => {
@@ -73,7 +96,11 @@ export default function DocumentCatalog() {
       if (!data.session?.user) return
       const { data: member } = await supabase.from('members').select('role').eq('id', data.session.user.id).maybeSingle()
       if (member?.role) {
+        setRole(member.role)
         setAllowed(['admin', 'librarian'].includes(member.role))
+        if (member.role === 'student' || member.role === 'external') {
+          await loadLoans(supabase, data.session!.user.id)
+        }
       }
       setRoleChecked(true)
     })
@@ -197,6 +224,47 @@ export default function DocumentCatalog() {
   return (
     <section className="flex-1 p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
+        {role === 'student' || role === 'external' ? (
+          <>
+            <div className="mb-6">
+              <p className="mb-1 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Mes emprunts</p>
+              <h1 className="text-2xl font-bold">Mes emprunts</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Consultez les documents que vous avez empruntés à la bibliothèque.</p>
+            </div>
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              {loansLoading ? <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} /> Chargement...</div>
+                : error ? <p className="p-8 text-sm text-red-600">{error}</p>
+                : loans.length === 0 ? <div className="p-12 text-center text-sm text-slate-500 dark:text-slate-400">Vous n&apos;avez aucun emprunt en cours ou passé.</div>
+                : <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                        <tr>
+                          {['Document', 'Type', 'Exemplaire', 'Date d’emprunt', 'Retour prévu', 'Statut'].map((label) => <th key={label} className="whitespace-nowrap px-5 py-3 font-semibold text-slate-500 dark:text-slate-400">{label}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loans.map((loan) => {
+                          const doc = loan.copy?.document
+                          const isOverdue = loan.status === 'active' && loan.due_date && new Date(loan.due_date) < new Date()
+                          const statusLabel = isOverdue ? 'En retard' : loan.status === 'active' ? 'En cours' : loan.status === 'returned' ? 'Rendu' : loan.status
+                          return <tr key={loan.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                            <td className="px-5 py-3 font-medium text-slate-900 dark:text-slate-100"><BookOpen size={14} className="mr-2 inline text-blue-500" />{doc?.title || 'Document supprimé'}</td>
+                            <td className="px-5 py-3 text-slate-500">{doc?.type || '—'}</td>
+                            <td className="px-5 py-3 text-slate-500">{loan.copy?.barcode || '—'}</td>
+                            <td className="px-5 py-3 text-slate-500">{loan.loan_date ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(loan.loan_date)) : '—'}</td>
+                            <td className="px-5 py-3 text-slate-500">{loan.due_date ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(loan.due_date)) : '—'}</td>
+                            <td className="whitespace-nowrap px-5 py-3">
+                              <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${isOverdue ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' : loan.status === 'active' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{isOverdue || loan.status !== 'returned' ? <Clock size={12} /> : <Check size={12} />}{statusLabel}</span>
+                            </td>
+                          </tr>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>}
+            </section>
+          </>
+        ) : (
+        <>
         <div className="mb-6">
           <p className="mb-1 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Données en temps réel</p>
           <h1 className="text-2xl font-bold">Documents</h1>
@@ -246,6 +314,8 @@ export default function DocumentCatalog() {
                 </table>
               </div>}
         </section>
+      </>
+      )}
       </div>
 
       {editing && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">

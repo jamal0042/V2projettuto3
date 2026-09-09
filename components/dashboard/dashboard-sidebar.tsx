@@ -13,11 +13,14 @@ type DashboardSidebarProps = {
   onSettings: () => void
   onHelp: () => void
   role: MemberRole
+  member: { first_name: string; last_name: string; role: MemberRole } | null
 }
 
 const roleLabels: Record<MemberRole, string> = { admin: 'Administrateur', librarian: 'Bibliothécaire', teacher: 'Enseignant', student: 'Étudiant', external: 'Externe' }
 
-export default function DashboardSidebar({ groups, active, open, onNavigate, onClose, onLogout, onSettings, onHelp, role }: DashboardSidebarProps) {
+export default function DashboardSidebar({ groups, active, open, onNavigate, onClose, onLogout, onSettings, onHelp, role, member }: DashboardSidebarProps) {
+  const name = member ? `${member.first_name} ${member.last_name}` : 'Chargement…'
+  const initials = member ? `${(member.first_name[0] || '').toUpperCase()}${(member.last_name[0] || '').toUpperCase()}` : '··'
   return (
     <>
       {open && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />}
@@ -39,7 +42,7 @@ export default function DashboardSidebar({ groups, active, open, onNavigate, onC
           <button onClick={onSettings} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"><Settings size={16} /><span>Paramètres</span></button>
           <button onClick={onHelp} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"><CircleHelp size={16} /><span>Centre d&apos;aide</span></button>
           <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition"><LogOut size={16} /><span>Se déconnecter</span></button>
-          <div className="flex items-center gap-3 p-2 mt-4 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition"><div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold">MC</div><div className="flex-1 min-w-0"><b className="block text-sm truncate">Marie Curie</b><span className="text-xs text-slate-500 dark:text-slate-400 truncate block">{roleLabels[role]}</span></div><MoreHorizontal size={16} className="text-slate-400" /></div>
+          <div className="flex items-center gap-3 p-2 mt-4 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition"><div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold">{initials}</div><div className="flex-1 min-w-0"><b className="block text-sm truncate">{name}</b><span className="text-xs text-slate-500 dark:text-slate-400 truncate block">{roleLabels[role]}</span></div><MoreHorizontal size={16} className="text-slate-400" /></div>
         </div>
       </aside>
     </>

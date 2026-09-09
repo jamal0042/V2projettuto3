@@ -23,7 +23,7 @@ export const PROFILE_FIELDS = [
 export function canChangeStatus(from: string, to: string): boolean {
   switch (to) {
     case 'active':
-      return ['suspended', 'inactive'].includes(from)
+      return ['suspended', 'inactive', 'pending'].includes(from)
     case 'suspended':
       return ['active', 'inactive'].includes(from)
     case 'inactive':

@@ -37,19 +37,11 @@
     { id: 5, label: 'Préférences', icon: Bell },
     ]
 
-    const roles: { value: MemberRole; label: string }[] = [
+    // L'inscription publique ne permet que les comptes étudiant / externe.
+    // Les comptes à accès privilégié sont créés par un administrateur.
+    const registerRoles: { value: MemberRole; label: string }[] = [
     { value: 'student', label: 'Étudiant' },
-    { value: 'teacher', label: 'Enseignant' },
-    { value: 'librarian', label: 'Bibliothécaire' },
-    { value: 'admin', label: 'Administrateur' },
     { value: 'external', label: 'Externe' },
-    ]
-
-    const statuses: { value: MemberStatus; label: string; color: string }[] = [
-    { value: 'active', label: 'Actif', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    { value: 'pending', label: 'En attente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    { value: 'suspended', label: 'Suspendu', color: 'bg-red-50 text-red-700 border-red-200' },
-    { value: 'inactive', label: 'Inactif', color: 'bg-gray-50 text-gray-700 border-gray-200' },
     ]
 
     // ✅ COMPOSANT TOGGLE SÉPARÉ ET TYPER EXPLICITEMENT
@@ -148,44 +140,29 @@
     async function handleRegisterSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusy(true); setError(''); setMessage('')
-        const supabase = createClient()
 
         try {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: form.email.trim(),
-            password,
-            options: { data: { full_name: `${form.first_name} ${form.last_name}`, role: form.role } },
-        })
-        if (authError || !authData.user) throw new Error(authError?.message || 'Création du compte impossible')
-
-        const { error: memberError } = await supabase.from('members').insert({
-            id: authData.user.id,
+        const res = await fetch('/api/inscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
             first_name: form.first_name.trim(),
             last_name: form.last_name.trim(),
             email: form.email.trim(),
-            role: form.role,
-            matricule: form.matricule.trim() || null,
-            phone: form.phone.trim() || null,
-            birth_date: form.birth_date || null,
-            address: form.address.trim() || null,
-            city: form.city.trim() || null,
-            department: form.department.trim() || null,
-            level: form.level.trim() || null,
-            speciality: form.speciality.trim() || null,
-            max_loans: form.max_loans,
-            max_loans_duration: form.max_loans_duration,
-            max_digital_loans: form.max_digital_loans,
-            status: form.status,
-            email_notifications: form.email_notifications,
-            sms_notifications: form.sms_notifications,
-            notes: form.notes.trim() || null,
-            invite_status: 'pending',
-            invite_sent_at: new Date().toISOString(),
+            account_type: form.role === 'external' ? 'external' : 'student',
+            phone: form.phone.trim() || undefined,
+            matricule: form.matricule.trim() || undefined,
+            department: form.department.trim() || undefined,
+            level: form.level.trim() || undefined,
+            speciality: form.speciality.trim() || undefined,
+            notes: form.notes.trim() || undefined,
+            }),
         })
-        if (memberError) throw new Error(memberError.message)
+        const result = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(result.error || 'Erreur lors de l’envoi de la demande')
 
-        setMessage(authData.session ? `Compte créé pour ${form.email}.` : `Compte créé. Consultez votre boîte mail pour confirmer ${form.email}.`)
-        setForm(initialForm); setStep(1); setMode('login')
+        setMessage('Votre demande d’inscription a été enregistrée. Après validation par l’administrateur, un email vous sera envoyé pour confirmer et activer votre compte.')
+        setForm(initialForm); setStep(1)
         } catch (err: any) {
         setError(err.message || 'Erreur lors de la création')
         } finally {
@@ -225,10 +202,10 @@
                 <Input label="Nom *" value={form.last_name} onChange={(e: any) => update('last_name', e.target.value)} placeholder="Uniluk" />
                 </div>
                 <Input label="Email *" type="email" value={form.email} onChange={(e: any) => update('email', e.target.value)} placeholder="biblius@universite.fr" />
-                <Input label="Mot de passe *" type="password" minLength={6} value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Au moins 6 caractères" />
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 -mt-1">Votre mot de passe sera défini via l’email de confirmation envoyé après validation.</p>
                 <div className="grid grid-cols-2 gap-3">
-                <Select label="Rôle" value={form.role} onChange={(e: any) => update('role', e.target.value)}>
-                    {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                <Select label="Type de compte" value={form.role} onChange={(e: any) => update('role', e.target.value)}>
+                    {registerRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </Select>
                 <Input label="Matricule" value={form.matricule} onChange={(e: any) => update('matricule', e.target.value)} placeholder="MAT-001" />
                 </div>
@@ -263,20 +240,7 @@
                 </div>
                 <div>
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">Statut</span>
-                <div className="grid grid-cols-2 gap-1.5">
-                    {statuses.map((s) => (
-                    <button
-                        key={s.value}
-                        type="button"
-                        onClick={() => update('status', s.value)}
-                        className={`px-2 py-1.5 text-[10px] font-semibold rounded-md border transition ${
-                        form.status === s.value ? s.color + ' ring-1 ring-blue-500' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                        }`}
-                    >
-                        {s.label}
-                    </button>
-                    ))}
-                </div>
+                <p className="rounded-md bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-[10px] text-slate-500 dark:text-slate-400">Votre compte sera activé par l’administrateur après validation de votre demande.</p>
                 </div>
             </div>
             )
