@@ -16,7 +16,14 @@ export default function AiChat() {
     const message = value.trim()
     if (!message || busy) return
     setValue(''); setError(''); setMessages((current) => [...current, { role: 'user', text: message }]); setBusy(true)
-    const response = await fetch('/api/agent-ia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) })
+    let response: Response
+    try {
+      response = await fetch('/api/agent-ia', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) })
+    } catch {
+      setError('Connexion au serveur impossible. Réessayez dans un instant.')
+      setBusy(false)
+      return
+    }
     const data = await response.json().catch(() => ({}))
     if (!response.ok) setError(data.error || 'Impossible de contacter l’assistant.')
     else setMessages((current) => [...current, { role: 'assistant', text: data.answer }])

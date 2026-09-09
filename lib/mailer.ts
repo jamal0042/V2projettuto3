@@ -8,7 +8,7 @@ export type InvitationEmailData = {
   expiresInHours: number
 }
 
-export function buildInvitationEmailHtml(data: Omit<InvitationEmailData, 'to'>) {
+export function buildInvitationEmailHtml(data: InvitationEmailData) {
   const typeLabel = data.accountType === 'external' ? 'Externe' : 'Étudiant'
   const blue = '#3d6df2'
   const amber = '#e9a53a'

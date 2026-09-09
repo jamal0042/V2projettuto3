@@ -36,7 +36,13 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'URL de ressource invalide.' }, { status: 400 })
   }
 
-  const upstream = await fetch(sourceUrl, { redirect: 'follow', cache: 'no-store' })
+  let upstream: Response
+  try {
+    upstream = await fetch(sourceUrl, { redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(15000) })
+  } catch (err) {
+    const reason = err instanceof Error && err.name === 'TimeoutError' ? 'Le fichier distant a mis trop de temps à répondre.' : 'Impossible d’atteindre le fichier distant.'
+    return NextResponse.json({ error: reason }, { status: 504 })
+  }
   if (!upstream.ok || !upstream.body) return NextResponse.json({ error: 'Le fichier distant est indisponible.' }, { status: 502 })
 
   const headers = new Headers()

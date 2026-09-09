@@ -127,7 +127,7 @@
             <div className="flex items-center gap-3 p-3 mx-4 mt-4 mb-2 bg-slate-100 dark:bg-slate-800 rounded-xl cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition">
             <div className="w-8 h-8 bg-amber-500 text-white rounded-full flex items-center justify-center font-bold text-sm">U</div>
             <div className="flex-1 min-w-0">
-                <b className="block text-sm truncate">Université de Lyon</b>
+                <b className="block text-sm truncate">Université Adventiste de lukanga</b>
                 <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">Bibliothèque centrale</span>
             </div>
             <ChevronDown size={15} className="text-slate-400" />
@@ -173,7 +173,7 @@
             <div className="flex items-center gap-3 p-2 mt-4 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition">
                 <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold">MC</div>
                 <div className="flex-1 min-w-0">
-                <b className="block text-sm truncate">Marie Curie</b>
+                <b className="block text-sm truncate">Jamal Faraja</b>
                 <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">Administratrice</span>
                 </div>
                 <MoreHorizontal size={16} className="text-slate-400" />
@@ -194,7 +194,7 @@
                 <p className="flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" /> Système opérationnel
                 </p>
-                <h1 className="text-2xl font-bold">Bonjour, Marie.</h1>
+                <h1 className="text-2xl font-bold">Bonjour, Jamal.</h1>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Voici ce qui se passe dans votre bibliothèque aujourd&apos;hui.</p>
                 </div>
                 <button onClick={() => router.push('/dashboard/documents/ajouter')} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-sm">

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { PostgrestError } from '@supabase/supabase-js'
 import { requireAdminAccess } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -10,7 +11,7 @@ export async function GET() {
   if (!admin) return NextResponse.json({ error: 'Supabase non configurée.' }, { status: 500 })
   if (!actor) return NextResponse.json({ error: 'Accès non autorisé.' }, { status: 403 })
 
-  async function count(query: ReturnType<typeof admin.from>) {
+  async function count(query: PromiseLike<{ count: number | null; error: PostgrestError | null }>) {
     const { count, error } = await query
     return { count, error }
   }

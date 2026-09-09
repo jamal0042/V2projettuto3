@@ -13,14 +13,21 @@ export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY est absente du serveur.' }, { status: 500 })
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: 'Tu es Biblius Intelligence, un assistant concis pour une bibliothèque universitaire. Réponds en français et aide à trouver des documents, comprendre les prêts et organiser le catalogue. Ne prétends jamais avoir exécuté une action si elle n’a pas été faite.' }] },
-      contents: [{ role: 'user', parts: [{ text: message }] }],
-    }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: 'Tu es Biblius Intelligence, un assistant concis pour une bibliothèque universitaire. Réponds en français et aide à trouver des documents, comprendre les prêts et organiser le catalogue. Ne prétends jamais avoir exécuté une action si elle n’a pas été faite.' }] },
+        contents: [{ role: 'user', parts: [{ text: message }] }],
+      }),
+      signal: AbortSignal.timeout(20000),
+    })
+  } catch (err) {
+    const reason = err instanceof Error && err.name === 'TimeoutError' ? 'Le service IA a mis trop de temps à répondre.' : 'Connexion au service IA impossible.'
+    return NextResponse.json({ error: reason }, { status: 504 })
+  }
 
   const result = await response.json().catch(() => null)
   if (!response.ok) return NextResponse.json({ error: result?.error?.message || 'Le service IA est indisponible.' }, { status: 502 })
