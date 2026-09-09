@@ -16,7 +16,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
-import { AlertTriangle, BarChart3, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, BarChart3, Loader2, Printer, RefreshCw } from 'lucide-react'
 
 type Slice = { name: string; value: number }
 type MonthPoint = { name: string; prets: number; retours: number }
@@ -156,12 +156,20 @@ export default function RapportsView({ variant = 'full' }: { variant?: 'full' | 
                 : 'Votre activité personnelle d’emprunt et de réservation.'}
             </p>
           </div>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-200"
-          >
-            <RefreshCw size={15} /> Actualiser
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-200 print:hidden"
+            >
+              <Printer size={15} /> Imprimer
+            </button>
+            <button
+              onClick={load}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium rounded-lg transition text-slate-700 dark:text-slate-200 print:hidden"
+            >
+              <RefreshCw size={15} /> Actualiser
+            </button>
+          </div>
         </div>
       )}
 

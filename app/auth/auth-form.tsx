@@ -221,10 +221,10 @@
             return (
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                <Input label="Prénom *" value={form.first_name} onChange={(e: any) => update('first_name', e.target.value)} placeholder="Marie" />
-                <Input label="Nom *" value={form.last_name} onChange={(e: any) => update('last_name', e.target.value)} placeholder="Curie" />
+                <Input label="Prénom *" value={form.first_name} onChange={(e: any) => update('first_name', e.target.value)} placeholder="biblius" />
+                <Input label="Nom *" value={form.last_name} onChange={(e: any) => update('last_name', e.target.value)} placeholder="Uniluk" />
                 </div>
-                <Input label="Email *" type="email" value={form.email} onChange={(e: any) => update('email', e.target.value)} placeholder="marie@universite.fr" />
+                <Input label="Email *" type="email" value={form.email} onChange={(e: any) => update('email', e.target.value)} placeholder="biblius@universite.fr" />
                 <Input label="Mot de passe *" type="password" minLength={6} value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Au moins 6 caractères" />
                 <div className="grid grid-cols-2 gap-3">
                 <Select label="Rôle" value={form.role} onChange={(e: any) => update('role', e.target.value)}>
@@ -237,10 +237,10 @@
         case 2:
             return (
             <div className="space-y-3">
-                <Input label="Téléphone" type="tel" value={form.phone} onChange={(e: any) => update('phone', e.target.value)} placeholder="+33 6 12 34 56 78" />
+                <Input label="Téléphone" type="tel" value={form.phone} onChange={(e: any) => update('phone', e.target.value)} placeholder="+243 9 12 34 56 78" />
                 <Input label="Date de naissance" type="date" value={form.birth_date} onChange={(e: any) => update('birth_date', e.target.value)} />
-                <Input label="Adresse" value={form.address} onChange={(e: any) => update('address', e.target.value)} placeholder="12 rue de la Paix" />
-                <Input label="Ville" value={form.city} onChange={(e: any) => update('city', e.target.value)} placeholder="Lyon" />
+                <Input label="Adresse" value={form.address} onChange={(e: any) => update('address', e.target.value)} placeholder="12 rue KIDUBAI" />
+                <Input label="Ville" value={form.city} onChange={(e: any) => update('city', e.target.value)} placeholder="Uniluk" />
             </div>
             )
         case 3:

@@ -1,7 +1,7 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { BookOpen, Check, Download, FileText, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, Check, Download, FileText, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Resource = { id: string; title: string; description: string | null; url: string; type: string; category: string; access_level: string; downloadable: boolean; document_id: string | null }
@@ -26,6 +26,9 @@ export default function DigitalLibrary() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -45,6 +48,14 @@ export default function DigitalLibrary() {
     load()
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const resourceId = params.get('resource')
+    if (!resourceId || resources.length === 0) return
+    const resource = resources.find((item) => item.id === resourceId)
+    if (resource) setSelected(resource)
+  }, [resources])
+
   const categories = useMemo(() => [...new Set(resources.map((resource) => resource.category).filter(Boolean))].sort(), [resources])
   const filtered = resources.filter((resource) => {
     const value = query.trim().toLowerCase()
@@ -59,15 +70,40 @@ export default function DigitalLibrary() {
     const supabase = createClient()
     const { data: user } = await supabase.auth.getSession()
     if (!user.session?.user || !isStaff) {
-      setError('Vous n’avez pas les droits pour ajouter une ressource.')
+      setError('Vous n\u2019avez pas les droits pour ajouter une ressource.')
       setSaving(false)
       return
     }
-    const { data, error: insertError } = await supabase.from('digital_resources').insert({ ...form, uploaded_by: user.session.user.id }).select('id, title, description, url, type, category, access_level, downloadable, document_id').single()
+
+    let fileUrl = form.url.trim()
+
+    if (selectedFile) {
+      setUploading(true)
+      const filePath = `resources/${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { error: uploadError } = await supabase.storage
+        .from('digital-resources')
+        .upload(filePath, selectedFile, { contentType: selectedFile.type, upsert: false })
+      if (uploadError) {
+        setError('Erreur lors de l\'upload: ' + uploadError.message)
+        setSaving(false); setUploading(false)
+        return
+      }
+      const { data: urlData } = supabase.storage.from('digital-resources').getPublicUrl(filePath)
+      fileUrl = urlData.publicUrl
+      setUploading(false)
+    }
+
+    if (!fileUrl) {
+      setError('Veuillez fournir une URL ou sélectionner un fichier.')
+      setSaving(false)
+      return
+    }
+
+    const { data, error: insertError } = await supabase.from('digital_resources').insert({ ...form, url: fileUrl, uploaded_by: user.session.user.id }).select('id, title, description, url, type, category, access_level, downloadable, document_id').single()
     if (insertError) setError(insertError.message)
     else if (data) {
       setResources((current) => [...current, data as Resource].sort((a, b) => a.title.localeCompare(b.title)))
-      setForm(emptyForm); setShowCreate(false); setMessage('Ressource numérique ajoutée.')
+      setForm(emptyForm); setShowCreate(false); setSelectedFile(null); setMessage('Ressource numérique ajoutée.')
     }
     setSaving(false)
   }
@@ -127,8 +163,31 @@ export default function DigitalLibrary() {
           {isStaff && <button onClick={() => setShowCreate((value) => !value)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><Plus size={16} /> Ajouter une ressource</button>}
         </div>
         {message && <p className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"><Check size={16} />{message}</p>}
-        {showCreate && <form onSubmit={createResource} className="mb-6 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-2"><h2 className="sm:col-span-2 font-semibold">Ajouter une ressource numérique</h2><input required placeholder="Titre" value={form.title} onChange={(e) => update('title', e.target.value)} className={inputClass} /><input required type="url" placeholder="URL du fichier" value={form.url} onChange={(e) => update('url', e.target.value)} className={inputClass} /><textarea placeholder="Description" value={form.description} onChange={(e) => update('description', e.target.value)} className={`${inputClass} resize-none`} rows={2} /><select value={form.type} onChange={(e) => update('type', e.target.value)} className={inputClass}><option value="pdf">PDF</option><option value="video">Vidéo</option><option value="audio">Audio</option><option value="link">Lien</option></select><input placeholder="Catégorie" value={form.category} onChange={(e) => update('category', e.target.value)} className={inputClass} /><select value={form.access_level} onChange={(e) => update('access_level', e.target.value)} className={inputClass}><option value="all">Tous</option><option value="student">Étudiants</option><option value="staff">Personnel</option></select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.downloadable} onChange={(e) => update('downloadable', e.target.checked)} /> Téléchargeable</label><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />} Enregistrer</button></form>}
-        {loading ? <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white p-12 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900"><Loader2 className="animate-spin" size={18} /> Chargement...</div> : error ? <p className="rounded-xl bg-red-50 p-6 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : <><div className="mb-5 grid gap-3 md:grid-cols-[1fr_240px]"><label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900"><Search size={16} className="text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une ressource" className="w-full bg-transparent text-sm outline-none" /></label><select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}><option value="">Toutes les catégories</option>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{filtered.map((resource) => <article key={resource.id} className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"><div className="mb-4 flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"><FileText size={19} /></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold dark:bg-slate-800">{resource.type}</span></div><h2 className="font-semibold">{resource.title}</h2><p className="mt-2 min-h-10 text-sm text-slate-500 dark:text-slate-400">{resource.description || 'Ressource numérique de la bibliothèque.'}</p><div className="mt-4 flex items-center justify-between gap-2"><span className="text-xs text-slate-400">{resource.category}</span><button onClick={() => setSelected(resource)} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700"><BookOpen size={14} /> Lire</button></div>{isStaff && <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800"><button onClick={() => openEdit(resource)} className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300"><Pencil size={13} /> Modifier</button><button onClick={() => setDeleting(resource)} className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300"><Trash2 size={13} /> Supprimer</button></div>}</article>)}</div></>}
+        {showCreate && (
+          <form onSubmit={createResource} className="mb-6 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-2">
+            <h2 className="sm:col-span-2 font-semibold">Ajouter une ressource numérique</h2>
+            <input required placeholder="Titre" value={form.title} onChange={(e) => update('title', e.target.value)} className={inputClass} />
+            <div className="sm:col-span-2">
+              <label className="mb-2 flex items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center transition hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-blue-500 dark:hover:bg-slate-700 cursor-pointer">
+                <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.mp4,.mp3,.epub,.txt,.csv,.xls,.xlsx,.ppt,.pptx" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setSelectedFile(file); if (!form.type || form.type === 'link') { const ext = file.name.split('.').pop()?.toLowerCase(); if (ext === 'pdf') update('type', 'pdf'); else if (ext === 'mp4') update('type', 'video'); else if (ext === 'mp3') update('type', 'audio'); } } }} />
+                <Upload size={20} className="mx-auto text-slate-400" />
+                {selectedFile ? (
+                  <span className="text-sm text-slate-700 dark:text-slate-300">{selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} Mo)</span>
+                ) : (
+                  <span className="text-sm text-slate-500 dark:text-slate-400">Cliquez pour sélectionner un fichier (PDF, Word, vidéo, audio...)</span>
+                )}
+              </label>
+            </div>
+            <input type="url" placeholder="Ou collez une URL (optionnel si fichier ci-dessus)" value={form.url} onChange={(e) => update('url', e.target.value)} className={inputClass} />
+            <textarea placeholder="Description" value={form.description} onChange={(e) => update('description', e.target.value)} className={`${inputClass} resize-none`} rows={2} />
+            <select value={form.type} onChange={(e) => update('type', e.target.value)} className={inputClass}><option value="pdf">PDF</option><option value="video">Vidéo</option><option value="audio">Audio</option><option value="link">Lien</option></select>
+            <input placeholder="Catégorie" value={form.category} onChange={(e) => update('category', e.target.value)} className={inputClass} />
+            <select value={form.access_level} onChange={(e) => update('access_level', e.target.value)} className={inputClass}><option value="all">Tous</option><option value="student">Étudiants</option><option value="staff">Personnel</option></select>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.downloadable} onChange={(e) => update('downloadable', e.target.checked)} /> Téléchargeable</label>
+            <button disabled={saving || uploading} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{saving || uploading ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />} {uploading ? 'Upload en cours...' : 'Enregistrer'}</button>
+          </form>
+        )}
+        {loading ? <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white p-12 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900"><Loader2 className="animate-spin" size={18} /> Chargement...</div> : error ? <p className="rounded-xl bg-red-50 p-6 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p> : <><div className="mb-5 grid gap-3 md:grid-cols-[1fr_240px]"><label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900"><Search size={16} className="text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher une ressource" className="w-full bg-transparent text-sm outline-none" /></label><select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}><option value="">Toutes les catégories</option>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{filtered.map((resource) => <article key={resource.id} className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"><div className="mb-4 flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"><FileText size={19} /></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold dark:bg-slate-800">{resource.type}</span></div><h2 className="font-semibold">{resource.title}</h2><p className="mt-2 min-h-10 text-sm text-slate-500 dark:text-slate-400">{resource.description || 'Ressource numérique de la bibliothèque.'}</p><div className="mt-4 flex items-center justify-between gap-2"><span className="text-xs text-slate-400">{resource.category}</span><div className="flex items-center gap-2">{isStaff && <button onClick={() => openEdit(resource)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><Pencil size={14} /></button>}{isStaff && <button onClick={() => setDeleting(resource)} className="rounded-lg p-2 text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 size={14} /></button>}<button onClick={() => setSelected(resource)} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">Consulter</button></div></div></article>)}</div></>}
       </div>
 
       {editing && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
