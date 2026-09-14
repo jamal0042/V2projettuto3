@@ -95,14 +95,14 @@ async function buildAdmin() {
 
   const [pretsRes, retoursRes, exemplairesRes, documentsRes, categoriesRes, membersRes, reservationsRes, penalitesRes, digitalRes] =
     await Promise.all([
-      supabase.from('prets').select('id, exemplaire_id, loan_date'),
-      supabase.from('retours').select('id, return_date'),
+      supabase.from('prets').select('id, exemplaire_id, loan_date, member_id, status'),
+      supabase.from('retours').select('id, pret_id, return_date'),
       supabase.from('exemplaires').select('id, document_id, status'),
       supabase.from('documents').select('id, title, category_id'),
       supabase.from('categories').select('id, name'),
-      supabase.from('members').select('id, role'),
-      supabase.from('reservations').select('id, status'),
-      supabase.from('penalites').select('id, status'),
+      supabase.from('members').select('id, role, first_name, last_name, email, status'),
+      supabase.from('reservations').select('id, status, member_id'),
+      supabase.from('penalites').select('id, status, amount, member_id'),
       supabase.from('digital_resources').select('id'),
     ])
 
@@ -122,6 +122,86 @@ async function buildAdmin() {
   const catName = new Map(categories.map((c) => [String(c.id), String(c.name ?? '')]))
   const exByDoc = new Map(exemplaires.map((e) => [String(e.id), String(e.document_id ?? '')]))
   const docTitle = new Map(documents.map((d) => [String(d.id), String(d.title ?? '—')]))
+
+  // ====== ANALYSE PAR MEMBRE : noms associés aux statistiques ======
+  const memberName = new Map(
+    members.map((m) => [
+      String(m.id),
+      `${String(m.first_name ?? '')} ${String(m.last_name ?? '')}`.trim() || String(m.email ?? 'Membre inconnu'),
+    ]),
+  )
+  const memberEmail = new Map(members.map((m) => [String(m.id), String(m.email ?? '')]))
+  const memberRole = new Map(members.map((m) => [String(m.id), String(m.role ?? '')]))
+
+  type MemberStat = { memberId: string; name: string; email: string; role: string; value: number }
+
+  function statByMember(counts: Map<string, number>, max: number): MemberStat[] {
+    return [...counts.entries()]
+      .map(([memberId, value]) => ({
+        memberId,
+        name: memberName.get(memberId) ?? 'Membre inconnu',
+        email: memberEmail.get(memberId) ?? '',
+        role: memberRole.get(memberId) ?? '',
+        value,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, max)
+  }
+
+  const loansByMember = new Map<string, number>()
+  for (const row of prets) {
+    const mid = String(row.member_id ?? '')
+    if (mid) loansByMember.set(mid, (loansByMember.get(mid) ?? 0) + 1)
+  }
+
+  const overdueByMember = new Map<string, number>()
+  for (const row of prets) {
+    if (row.status === 'overdue') {
+      const mid = String(row.member_id ?? '')
+      if (mid) overdueByMember.set(mid, (overdueByMember.get(mid) ?? 0) + 1)
+    }
+  }
+
+  const resByMember = new Map<string, number>()
+  for (const row of reservations) {
+    const mid = String(row.member_id ?? '')
+    if (mid) resByMember.set(mid, (resByMember.get(mid) ?? 0) + 1)
+  }
+
+  const pretOwner = new Map(prets.map((p) => [String(p.id), String(p.member_id ?? '')]))
+  const returnsByMember = new Map<string, number>()
+  for (const row of retours) {
+    const mid = pretOwner.get(String(row.pret_id ?? '')) ?? ''
+    if (mid) returnsByMember.set(mid, (returnsByMember.get(mid) ?? 0) + 1)
+  }
+
+  const activityByMember = new Map<string, number>()
+  for (const [mid, n] of loansByMember) activityByMember.set(mid, (activityByMember.get(mid) ?? 0) + n)
+  for (const [mid, n] of resByMember) activityByMember.set(mid, (activityByMember.get(mid) ?? 0) + n)
+  for (const [mid, n] of returnsByMember) activityByMember.set(mid, (activityByMember.get(mid) ?? 0) + n)
+
+  const penaltyByMember = new Map<string, number>()
+  for (const row of penalites) {
+    const mid = String(row.member_id ?? '')
+    if (!mid) continue
+    const amount = Number(row.amount) || 0
+    penaltyByMember.set(mid, (penaltyByMember.get(mid) ?? 0) + amount)
+  }
+  const topPenaltyMembers: MemberStat[] = [...penaltyByMember.entries()]
+    .map(([memberId, value]) => ({
+      memberId,
+      name: memberName.get(memberId) ?? 'Membre inconnu',
+      email: memberEmail.get(memberId) ?? '',
+      role: memberRole.get(memberId) ?? '',
+      value: Math.round(value * 100) / 100,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10)
+
+  const topBorrowers = statByMember(loansByMember, 10)
+  const topOverdueMembers = statByMember(overdueByMember, 10)
+  const topReservations = statByMember(resByMember, 10)
+  const mostActiveMembers = statByMember(activityByMember, 10)
 
   const pretsParDate = monthSeries(prets, 'loan_date')
   const retoursParDate = monthSeries(retours, 'return_date')
@@ -162,6 +242,11 @@ async function buildAdmin() {
     exemplairesByStatus: countBy(exemplaires, 'status', EXEMPLAIRE_LABELS),
     reservationsByStatus: countBy(reservations, 'status', RESERVATION_LABELS),
     penalitesByStatus: countBy(penalites, 'status', PENALITE_LABELS),
+    topBorrowers,
+    mostActiveMembers,
+    topOverdueMembers,
+    topReservations,
+    topPenaltyMembers,
   }
 }
 

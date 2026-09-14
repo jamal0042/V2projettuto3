@@ -22,6 +22,8 @@ type Slice = { name: string; value: number }
 type MonthPoint = { name: string; prets: number; retours: number }
 type Kpis = Record<string, number>
 
+type MemberStat = { memberId: string; name: string; email: string; role: string; value: number }
+
 type RapportData = {
   view: 'admin' | 'user'
   kpis: Kpis
@@ -33,8 +35,21 @@ type RapportData = {
   reservationsByStatus: Slice[]
   penalitesByStatus: Slice[]
   myLoans?: Slice[]
+  topBorrowers?: MemberStat[]
+  mostActiveMembers?: MemberStat[]
+  topOverdueMembers?: MemberStat[]
+  topReservations?: MemberStat[]
+  topPenaltyMembers?: MemberStat[]
   error?: string
   configured?: boolean
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  librarian: 'Bibliothécaire',
+  teacher: 'Enseignant',
+  student: 'Étudiant',
+  external: 'Externe',
 }
 
 const PALETTE = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#f43f5e', '#84cc16']
@@ -83,6 +98,66 @@ function ChartCard({
       {subtitle ? <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p> : null}
       <div className="mt-4">{children}</div>
     </section>
+  )
+}
+
+function MemberLeaderboard({
+  rows,
+  unit,
+  color = '#3b82f6',
+  highlightFirst = false,
+  money = false,
+}: {
+  rows: MemberStat[]
+  unit: string
+  color?: string
+  highlightFirst?: boolean
+  money?: boolean
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.value))
+  return (
+    <ul className="space-y-2">
+      {rows.map((row, index) => (
+        <li key={row.memberId} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                  index === 0 && highlightFirst
+                    ? 'bg-amber-400 text-amber-950'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  {row.name}
+                  {index === 0 && highlightFirst ? (
+                    <span className="ml-2 rounded-full bg-amber-100 dark:bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                      TOP 1
+                    </span>
+                  ) : null}
+                </p>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                  {row.email || '—'} · {ROLE_LABELS[row.role] ?? row.role}
+                </p>
+              </div>
+            </div>
+            <strong className="shrink-0 text-sm font-bold text-slate-900 dark:text-slate-100">
+              {money ? row.value.toLocaleString('fr-FR') : row.value}
+              <span className="ml-1 text-xs font-medium text-slate-500 dark:text-slate-400">{money ? 'FCFA' : unit}</span>
+            </strong>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${Math.max(4, (row.value / max) * 100)}%`, background: color }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -308,6 +383,39 @@ export default function RapportsView({ variant = 'full' }: { variant?: 'full' | 
                 </PieChart>
               </ResponsiveContainer>
             </ChartCard>
+
+            {(data.topBorrowers && data.topBorrowers.length > 0) && (
+              <ChartCard title="Les plus grands lecteurs" subtitle="Membres ayant le plus emprunté, avec leur nom">
+                <MemberLeaderboard rows={data.topBorrowers} unit="emprunt" color="#3b82f6" highlightFirst />
+              </ChartCard>
+            )}
+
+            {(data.mostActiveMembers && data.mostActiveMembers.length > 0) && (
+              <ChartCard
+                title="Membres les plus actifs"
+                subtitle="Total transactions : emprunts + réservations + retours"
+              >
+                <MemberLeaderboard rows={data.mostActiveMembers} unit="actions" color="#8b5cf6" />
+              </ChartCard>
+            )}
+
+            {(data.topOverdueMembers && data.topOverdueMembers.length > 0) && (
+              <ChartCard title="Retardataires récurrents" subtitle="Membres avec le plus d’emprunts en retard">
+                <MemberLeaderboard rows={data.topOverdueMembers} unit="retard" color="#ef4444" />
+              </ChartCard>
+            )}
+
+            {(data.topReservations && data.topReservations.length > 0) && (
+              <ChartCard title="Plus grandes demandeuses de réservations" subtitle="Membres ayant le plus réservé">
+                <MemberLeaderboard rows={data.topReservations} unit="réservation" color="#06b6d4" />
+              </ChartCard>
+            )}
+
+            {(data.topPenaltyMembers && data.topPenaltyMembers.length > 0) && (
+              <ChartCard title="Pénalités par membre" subtitle="Montants cumulés des pénalités (FCFA)">
+                <MemberLeaderboard rows={data.topPenaltyMembers} unit="" color="#f59e0b" money />
+              </ChartCard>
+            )}
           </>
         ) : (
           <>

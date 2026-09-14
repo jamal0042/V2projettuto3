@@ -7,13 +7,53 @@ import { createClient } from '@/lib/supabase/client'
 import {
   BookOpen, Library, Sparkles, Users, Shield, Zap,
   ArrowRight, Brain, Database, Globe, ChevronRight,
-  Moon, Sun, Mail, MapPin
+  Moon, Sun, Mail, MapPin, X, Layers, Calendar, Hash,
+  FileText, PackageCheck, BookMarked, Loader2
 } from 'lucide-react'
+
+type BookAuthor = { author_id: string; auteurs: { name: string } | null }
+type Book = {
+  id: string
+  title: string
+  subtitle: string | null
+  type: string
+  year: number | null
+  publisher: string | null
+  isbn: string | null
+  description: string | null
+  cover_url: string | null
+  digital_url: string | null
+  format: string | null
+  language: string | null
+  pages: number | null
+  edition: string | null
+  collection: string | null
+  document_auteurs?: BookAuthor[] | null
+  exemplaires?: { status: string }[] | null
+  author: string
+  isDigital: boolean
+  totalCopies: number
+  availableCopies: number
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  book: 'Livre',
+  thesis: 'Thèse',
+  memoire: 'Mémoire',
+  journal: 'Journal',
+  article: 'Article',
+  dvd: 'DVD',
+  cd: 'CD',
+  other: 'Autre',
+}
 
 export default function HomePage() {
   const router = useRouter()
   const [darkMode, setDarkMode] = useState(false)
   const [session, setSession] = useState<any>(null)
+  const [books, setBooks] = useState<Book[]>([])
+  const [booksLoading, setBooksLoading] = useState(true)
+  const [selected, setSelected] = useState<Book | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -23,6 +63,36 @@ export default function HomePage() {
     })
     const saved = window.localStorage.getItem('biblius-theme')
     setDarkMode(saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+    supabase
+      .from('documents')
+      .select(
+        'id, title, subtitle, type, year, publisher, isbn, description, cover_url, digital_url, format, language, pages, edition, collection, document_auteurs(author_id, auteurs(name)), exemplaires(status)',
+      )
+      .order('created_at', { ascending: false })
+      .limit(60)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setBooks(
+            data.map((row: any) => {
+              const copies = row.exemplaires || []
+              const digital = !!(row.digital_url || /num|digit|electron/i.test(row.format || ''))
+              return {
+                ...row,
+                author:
+                  row.document_auteurs
+                    ?.map((item: any) => item.auteurs?.name)
+                    .filter(Boolean)
+                    .join(', ') || 'Auteur non renseigné',
+                isDigital: digital,
+                totalCopies: copies.length,
+                availableCopies: copies.filter((c: any) => c.status === 'available').length,
+              }
+            }),
+          )
+        }
+        setBooksLoading(false)
+      })
   }, [])
 
   const toggleTheme = () => {
@@ -158,6 +228,58 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ====== ANNUAIRE DES LIVRES : PHYSIQUES & NUMÉRIQUES ====== */}
+      <section id="catalogue" className="catalogue">
+        <div className="section-header">
+          <h2>Le catalogue</h2>
+          <p>Découvrez nos livres physiques et numériques, comme en boutique</p>
+        </div>
+
+        {booksLoading ? (
+          <div className="catalog-loading">
+            <Loader2 size={20} className="catalog-spin" />
+            <span>Chargement du catalogue…</span>
+          </div>
+        ) : books.length === 0 ? (
+          <div className="catalog-loading">
+            <span>Aucun livre pour le moment. Ajoutez des documents depuis le tableau de bord.</span>
+          </div>
+        ) : (
+          <div className="catalog-grid">
+            {books.map((book) => (
+              <div key={book.id} className="catalog-card" onClick={() => setSelected(book)}>
+                <div className="catalog-cover">
+                  {book.cover_url ? (
+                    <img src={book.cover_url} alt={book.title} loading="lazy" />
+                  ) : (
+                    <div className="catalog-cover-fallback">
+                      <BookOpen size={34} />
+                    </div>
+                  )}
+                  <span className={`catalog-format ${book.isDigital ? 'format-num' : 'format-phys'}`}>
+                    {book.isDigital ? 'Numérique' : 'Physique'}
+                  </span>
+                </div>
+                <div className="catalog-info">
+                  <h3 title={book.title}>{book.title}</h3>
+                  <p className="catalog-author">{book.author}</p>
+                  <div className="catalog-meta">
+                    <span className={`catalog-copies ${book.availableCopies > 0 ? 'in-stock' : 'out-stock'}`}>
+                      <PackageCheck size={13} />
+                      {book.totalCopies === 0
+                        ? book.isDigital
+                          ? 'Disponible en ligne'
+                          : 'Aucun exemplaire'
+                        : `${book.totalCopies} exempl. · ${book.availableCopies} dispo.`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* ====== FOOTER COMPLET ====== */}
       <footer className="home-footer">
         <div className="footer-grid">
@@ -208,6 +330,93 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* ====== MODAL DÉTAILS D'UN LIVRE ====== */}
+      {selected && (
+        <div className="catalog-modal-backdrop" onClick={() => setSelected(null)}>
+          <div className="catalog-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSelected(null)} aria-label="Fermer">
+              <X size={18} />
+            </button>
+            <div className="modal-cover">
+              {selected.cover_url ? (
+                <img src={selected.cover_url} alt={selected.title} />
+              ) : (
+                <div className="catalog-cover-fallback large">
+                  <BookOpen size={52} />
+                </div>
+              )}
+              <span className={`catalog-format ${selected.isDigital ? 'format-num' : 'format-phys'}`}>
+                {selected.isDigital ? 'Numérique' : 'Physique'}
+              </span>
+            </div>
+            <div className="modal-body">
+              <h3>{selected.title}</h3>
+              {selected.subtitle && <p className="modal-subtitle">{selected.subtitle}</p>}
+              <p className="modal-author">{selected.author}</p>
+              {selected.description && <p className="modal-desc">{selected.description}</p>}
+
+              <div className="modal-metadata">
+                <div className="meta-item">
+                  <Hash size={14} />
+                  <span><b>Type</b>{TYPE_LABELS[selected.type] || 'Autre'}</span>
+                </div>
+                <div className="meta-item">
+                  <Calendar size={14} />
+                  <span><b>Année</b>{selected.year || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <Layers size={14} />
+                  <span><b>Éditeur</b>{selected.publisher || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <Hash size={14} />
+                  <span><b>ISBN / ISSN</b>{selected.isbn || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <Globe size={14} />
+                  <span><b>Langue</b>{selected.language || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <FileText size={14} />
+                  <span><b>Pages</b>{selected.pages || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <BookMarked size={14} />
+                  <span><b>Édition</b>{selected.edition || '—'}</span>
+                </div>
+                <div className="meta-item">
+                  <Layers size={14} />
+                  <span><b>Collection</b>{selected.collection || '—'}</span>
+                </div>
+              </div>
+
+              <div className="modal-copies">
+                <div className="copies-title">Exemplaires disponibles</div>
+                <div className="copies-row">
+                  <div className="copy-stat">
+                    <strong>{selected.totalCopies}</strong>
+                    <span>Total</span>
+                  </div>
+                  <div className="copy-stat good">
+                    <strong>{selected.availableCopies}</strong>
+                    <span>Disponibles</span>
+                  </div>
+                  <div className="copy-stat muted">
+                    <strong>{selected.totalCopies - selected.availableCopies}</strong>
+                    <span>Empruntés / indisponibles</span>
+                  </div>
+                </div>
+                {selected.isDigital && selected.digital_url ? (
+                  <a href={selected.digital_url} target="_blank" rel="noopener noreferrer" className="cta-primary catalog-cta">
+                    Consulter la version numérique <ArrowRight size={14} />
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         /* ====== SHELL ====== */
@@ -750,6 +959,223 @@ export default function HomePage() {
         }
         .footer-legal a:hover { color: var(--primary); }
 
+        /* ====== CATALOGUE / BOUTIQUE ====== */
+        .catalogue {
+          position: relative;
+          z-index: 10;
+          max-width: 1160px;
+          margin: 0 auto;
+          padding: 60px 40px 20px;
+        }
+        .catalog-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 60px 0;
+          color: var(--muted);
+          font-size: 14px;
+        }
+        .catalog-spin { animation: spinCat 1s linear infinite; }
+        @keyframes spinCat { to { transform: rotate(360deg); } }
+        .catalog-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+          gap: 20px;
+        }
+        .catalog-card {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.3s;
+        }
+        .catalog-card:hover {
+          transform: translateY(-6px);
+          border-color: var(--primary);
+          box-shadow: 0 16px 40px rgba(61, 109, 242, 0.16);
+        }
+        .catalog-cover {
+          position: relative;
+          aspect-ratio: 3 / 4;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(160deg, var(--blue-soft, #eaf0ff), #f1f5fb);
+          overflow: hidden;
+        }
+        .home-dark .catalog-cover {
+          background: linear-gradient(160deg, #1b2a47, #14203a);
+        }
+        .catalog-cover img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .catalog-cover-fallback {
+          display: grid;
+          place-items: center;
+          width: 100%;
+          height: 100%;
+          color: var(--primary);
+          opacity: 0.85;
+        }
+        .catalog-cover-fallback.large { font-size: 20px; }
+        .catalog-format {
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          padding: 4px 10px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.4px;
+          border-radius: 999px;
+          color: white;
+          backdrop-filter: blur(4px);
+        }
+        .format-phys { background: rgba(61, 109, 242, 0.92); }
+        .format-num { background: rgba(139, 92, 246, 0.92); }
+        .catalog-info { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+        .catalog-info h3 {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 700;
+          line-height: 1.35;
+          color: var(--text);
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .catalog-author {
+          margin: 0;
+          font-size: 12px;
+          color: var(--muted);
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .catalog-meta { margin-top: auto; }
+        .catalog-copies {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 5px 10px;
+          border-radius: 8px;
+        }
+        .catalog-copies.in-stock { color: #1a7f4b; background: #e6f7ee; }
+        .home-dark .catalog-copies.in-stock { color: #6ee7a8; background: #123523; }
+        .catalog-copies.out-stock { color: #b45309; background: #fdf1e3; }
+        .home-dark .catalog-copies.out-stock { color: #fbbf6d; background: #3a2a16; }
+
+        /* ====== MODAL DÉTAILS ====== */
+        .catalog-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 200;
+          display: grid;
+          place-items: center;
+          padding: 24px;
+          background: rgba(10, 15, 30, 0.55);
+          backdrop-filter: blur(6px);
+          animation: fadeIn .2s ease both;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .catalog-modal {
+          position: relative;
+          display: grid;
+          grid-template-columns: 260px 1fr;
+          gap: 0;
+          width: min(780px, 100%);
+          max-height: 88vh;
+          overflow: auto;
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+          animation: modalIn .25s cubic-bezier(.22, 1, .36, 1) both;
+        }
+        @keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .modal-close {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 3;
+          width: 34px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          background: var(--card);
+          color: var(--muted);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .modal-close:hover { color: var(--text); border-color: var(--primary); }
+        .modal-cover {
+          position: relative;
+          min-height: 300px;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(160deg, var(--blue-soft, #eaf0ff), #f1f5fb);
+          padding: 24px;
+        }
+        .home-dark .modal-cover {
+          background: linear-gradient(160deg, #1b2a47, #14203a);
+        }
+        .modal-cover img { max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 6px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+        .modal-cover .catalog-format { top: 16px; left: 16px; }
+        .modal-body { padding: 28px 28px 24px; min-width: 0; }
+        .modal-body h3 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.25; }
+        .modal-subtitle { margin: 6px 0 0; font-size: 14px; font-weight: 600; color: var(--primary); }
+        .modal-author { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+        .modal-desc { margin: 14px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+        .modal-metadata {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 20px;
+        }
+        .meta-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 11px;
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          color: var(--primary);
+          font-size: 12px;
+          background: color-mix(in srgb, var(--card) 60%, transparent);
+        }
+        .meta-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .meta-item b { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 2px; }
+        .modal-copies { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+        .copies-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 12px; }
+        .copies-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .copy-stat { padding: 12px; border-radius: 10px; text-align: center; background: var(--surface-2, #f7f9fc); border: 1px solid var(--border); }
+        .home-dark .copy-stat { background: #1c2a40; }
+        .copy-stat strong { display: block; font-size: 22px; font-weight: 800; color: var(--text); }
+        .copy-stat span { font-size: 10px; color: var(--muted); }
+        .copy-stat.good strong { color: #1a9d5c; }
+        .copy-stat.muted strong { color: #b45309; }
+        .catalog-cta {
+          margin-top: 18px;
+          justify-content: center;
+          display: inline-flex;
+          text-decoration: none;
+          border: 0;
+          cursor: pointer;
+        }
+        .catalog-cta.disabled { opacity: 1; }
+
         @media (max-width: 768px) {
           .home-nav { 
             padding: 14px 20px;
@@ -774,6 +1200,14 @@ export default function HomePage() {
           .features { padding: 40px 20px 60px; }
           .hero-stats { flex-direction: column; gap: 16px; }
           .stat-divider { width: 40px; height: 1px; }
+          .catalogue { padding: 40px 20px 10px; }
+          .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+          .catalog-modal { grid-template-columns: 1fr; max-height: 92vh; }
+          .modal-cover { min-height: 220px; }
+          .modal-cover img { max-height: 300px; }
+          .modal-body { padding: 20px 20px 18px; }
+          .modal-metadata { grid-template-columns: 1fr; gap: 8px; }
+          .copies-row { grid-template-columns: 1fr; }
           .home-footer { padding: 40px 20px 20px; margin-top: 40px; }
           .footer-grid { grid-template-columns: 1fr; gap: 32px; }
           .footer-links { grid-template-columns: repeat(3, 1fr); gap: 16px; }
